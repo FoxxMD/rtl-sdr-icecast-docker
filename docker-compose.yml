@@ -1,0 +1,56 @@
+version: '3.7'
+
+services:
+  rtl_tcp:
+    image: docker.io/kosdk/rtl-tcp
+    container_name: rtl_tcp
+    privileged: true
+    environment:
+      # If the container fails with an error about usb handling
+      # and the output lists multiple devices try 1,2,etc... device
+      - DEVICE=0
+    devices:
+      - "/dev/bus/usb/005/006"
+
+  #
+  # Can use EITHER nrsc5 OR shinysdr -- cannot use both at the same time
+  #
+
+  #####################
+  nrsc5:
+    image: ghcr.io/foxxmd/nrsc5-rtlsdr-icecast
+    container_name: nrsc5_icecast
+    environment:
+      - ICECAST_URL=icecast:8000/myradio
+      - ICECAST_PWD=hackme
+      - RADIO_STATION=90.1
+      #- CHANNEL=1
+      #- AUDIO_FORMAT=MP3
+      - RTL_TCP=rtl_tcp:1234
+      #- STATS_INTERVAL=0 # use either this OR devices below for RTL-SDR device access
+  #####################
+
+  #####################
+  shinysdr:
+    image: docker.io/jeffersonjhunt/shinysdr
+    container_name: shinysdr
+    volumes:
+      - './config/shinysdr:/config'
+  shiny_ffmpeg:
+    image: linuxserver/ffmpeg
+    container_name: shiny_ffmpeg
+    command: -nostats -i http://shinysdr:8100/public/audio-stream?rate=48000 -vn -codec:a libmp3lame -b:a 192k -f mp3 -content_type audio/mpeg icecast://source:hackme@icecast:8000/myradio
+  #####################
+
+  icecast:
+    image: docker.io/j33r/icecast
+    container_name: icecast
+    ports:
+      - "8000:8000"
+  icecast_ytdl:
+    image: docker.io/foxxmd/ytdl-cron
+    container_name: icecast_ytdl
+    environment:
+    # https://docs.linuxserver.io/general/understanding-puid-and-pgid/
+      - PUID=1000
+      - PGID=1000
