@@ -94,4 +94,4 @@ fabric.properties
 
 .env
 config/ytdl
-!config/ytdl/crontabs/abc.example
+!config/ytdl/*.example
