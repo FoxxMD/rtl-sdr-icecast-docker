@@ -1,4 +1,0 @@
-# min   hour    day     month   weekday command
-
-# test stream, 20 seconds every minute
-#* * * * * yt-dlp --quiet http://icecast:8000/myradio -x --download-sections "*0-20" -o "/config/streams/test-%(epoch-18000>%Y-%m-%d--%H-%M-%S)s.mp3"

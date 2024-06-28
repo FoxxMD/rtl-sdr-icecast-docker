@@ -99,12 +99,12 @@ The stream will be available at `http://localhost:8000/myradio` (or whatever you
 
 ## (Optional) Scheduled stream downloads
 
-You can schedule an optional [yt-dlp](https://github.com/yt-dlp/yt-dlp) container to save audio streams to mp3.
+Schedule an optional [yt-dlp](https://github.com/yt-dlp/yt-dlp) container to save audio streams to mp3:
 
-To set the schedule edit [/config/ytdl/crontabs/abc](/config/ytdl/crontabs/abc):
-
-* set the [cron expression](https://crontab.guru/)
-* edit downloading length `--download-sections "*0-20"` in seconds IE `*0-20` = save the first 20 seconds of the stream
+* Make a copy of [/config/ytdl/crontabs/abc.example](/config/ytdl/crontabs/abc.example) and rename to `abc` (no extension)
+* Edit /config/ytdl/crontabs/abc:
+  * set the [cron expression](https://crontab.guru/) for when the stream should start recording
+  * edit downloading length `--download-sections "*0-20"` in seconds IE `*0-20` = save the first 20 seconds of the stream
 
 Note: If you run Docker on a **Linux Host** see the instructions in your `.env` under `### YTDL ###` for `PUID/PGID` to set file permissions correctly.
 
