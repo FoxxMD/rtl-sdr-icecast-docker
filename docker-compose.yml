@@ -2,6 +2,7 @@ version: '3.7'
 
 services:
   rtl_tcp:
+    # https://github.com/Cossey/docker/tree/master/rtl-tcp
     image: docker.io/kosdk/rtl-tcp
     container_name: rtl_tcp
 
@@ -12,19 +13,34 @@ services:
       #- "/dev/bus/usb/[BUS]/[DEVICE]"
 
       # Example (replace with your own)
-      - ${USB_DEVICE:-"/dev/bus/usb/"}
+      - ${USB_DEVICE:-/dev/bus/usb/}
 
     environment:
       # If the container fails with an error about usb handling
       # and the output lists multiple devices try 1,2,etc... device
       - DEVICE=${RTL_DEVICE:-0}
 
+    # make other containers wait at least 5 seconds so rtl_tcp has time to start up
+    healthcheck:
+      test: ["CMD", "echo", "0"]
+      interval: 5s
+      start_period: 5s
+      timeout: 2s
+      retries: 3
+
   icecast:
-    image: docker.io/j33r/icecast
+    image: docker.io/riftbit/icecast
     container_name: icecast
     # expose port if you want icecast to be accessible on your host network
     ports:
+      # ICECAST_PORT is the host port
       - "${ICECAST_PORT:-8000}:8000"
+    environment:
+      # internally used for container connections, do not edit
+      ICE_RADIO_LISTEN_PORT: 8000
+      ICE_RADIO_SOURCE_PASSWORD: ${ICECAST_PWD:-hackme}
+      ICE_RADIO_ADMIN_PASSWORD: ${ICECAST_ADMIN_PW:-hackme}
+      ICE_RADIO_ADMIN_USERNAME: ${ICECAST_ADMIN_USER:-admin}
 
   # If you do not need ytdl to save from icecast remove
   # --profile ytdl and 'ytdl' from COMPOSE_PROFILES
@@ -59,11 +75,14 @@ services:
     profiles:
       - hd
     depends_on:
-     - rtl_tcp
-     - icecast
+     rtl_tcp:
+       condition: service_healthy
+       #condition: service_started
+     icecast:
+       condition: service_started
     environment:
       - ICECAST_URL=icecast:8000/${ICECAST_STATION_NAME:-myradio}
-      - ICECAST_PWD=hackme
+      - ICECAST_PWD=${ICECAST_PWD:-hackme}
 
       # FM radio station
       - RADIO_STATION=${RADIO_STATION:?error}
@@ -100,5 +119,5 @@ services:
     profiles:
       - fm
     container_name: shiny_ffmpeg
-    command: -nostats -i http://shinysdr:8100/public/audio-stream?rate=48000 -vn -codec:a libmp3lame -b:a 192k -f mp3 -content_type audio/mpeg icecast://source:hackme@icecast:8000/${ICECAST_STATION_NAME:-myradio}
+    command: -nostats -i http://shinysdr:8100/public/audio-stream?rate=48000 -vn -codec:a libmp3lame -b:a 192k -f mp3 -content_type audio/mpeg icecast://source:${ICECAST_PWD:-hackme}@icecast:8000/${ICECAST_STATION_NAME:-myradio}
   #####################
