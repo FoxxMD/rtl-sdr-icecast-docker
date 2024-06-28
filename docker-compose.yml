@@ -4,53 +4,101 @@ services:
   rtl_tcp:
     image: docker.io/kosdk/rtl-tcp
     container_name: rtl_tcp
-    privileged: true
+
+    # Set privileged to true if device passthrough does not work
+    privileged: false
+    devices:
+      # the path to the USB rtl device, use command 'lsusb' to get [BUS]/[DEVICE] identifiers
+      #- "/dev/bus/usb/[BUS]/[DEVICE]"
+
+      # Example (replace with your own)
+      - ${USB_DEVICE:-"/dev/bus/usb/"}
+
     environment:
       # If the container fails with an error about usb handling
       # and the output lists multiple devices try 1,2,etc... device
-      - DEVICE=0
-    devices:
-      - "/dev/bus/usb/005/006"
+      - DEVICE=${RTL_DEVICE:-0}
+
+  icecast:
+    image: docker.io/j33r/icecast
+    container_name: icecast
+    # expose port if you want icecast to be accessible on your host network
+    ports:
+      - "${ICECAST_PORT:-8000}:8000"
+
+  # If you do not need ytdl to save from icecast remove
+  # --profile ytdl and 'ytdl' from COMPOSE_PROFILES
+  # in the below example commands for nrsc5/shinysdr
+  icecast_ytdl:
+    image: docker.io/foxxmd/ytdl-cron
+    depends_on:
+      - icecast
+    profiles:
+      - ytdl
+    container_name: icecast_ytdl
+    environment:
+      # https://docs.linuxserver.io/general/understanding-puid-and-pgid/
+      - PUID=${PUID}
+      - PGID=${PGID}
+      # replace with TZ identifier for your timezone so cron schedule is in local time
+      # https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List
+      - TZ={TZ}
+    volumes:
+      - "${YTDL_DIR:-./config/ytdl}:/config"
 
   #
-  # Can use EITHER nrsc5 OR shinysdr -- cannot use both at the same time
+  # Can use EITHER nrsc5 (hd) OR shinysdr (fm) -- cannot use both at the same time
   #
 
+  # docker compose --profile hd --profile ytdl up
+  # or in .env COMPOSE_PROFILES=hd,ytdl
   #####################
   nrsc5:
-    image: ghcr.io/foxxmd/nrsc5-rtlsdr-icecast
+    image: ghcr.io/foxxmd/nrsc5-rtlsdr-icecast:test
     container_name: nrsc5_icecast
+    profiles:
+      - hd
+    depends_on:
+     - rtl_tcp
+     - icecast
     environment:
-      - ICECAST_URL=icecast:8000/myradio
+      - ICECAST_URL=icecast:8000/${ICECAST_STATION_NAME:-myradio}
       - ICECAST_PWD=hackme
-      - RADIO_STATION=90.1
-      #- CHANNEL=1
-      #- AUDIO_FORMAT=MP3
+
+      # FM radio station
+      - RADIO_STATION=${RADIO_STATION:?error}
+
+      # if your station has multiple HD channels set it here, otherwise Channel 1 is default
+      - CHANNEL=${HD_CHANNEL:-1}
+
+      # Audio output format to stream to Icecast -- Valid formats: MP3, WAV, OGG
+      - AUDIO_FORMAT=${AUDIO_FORMAT:-MP3}
+
       - RTL_TCP=rtl_tcp:1234
-      #- STATS_INTERVAL=0 # use either this OR devices below for RTL-SDR device access
+
+      # keeps ffmpeg output quiet. # of seconds between ffmpeg progress output
+      - STATS_INTERVAL=${STATS_INTERVAL:-0}
   #####################
 
+  # docker compose --profile fm --profile ytdl up
+  # or in .env COMPOSE_PROFILES=fm,ytdl
   #####################
   shinysdr:
     image: docker.io/jeffersonjhunt/shinysdr
+    profiles:
+      - fm
+    depends_on:
+     - rtl_tcp
+     - icecast
     container_name: shinysdr
     volumes:
       - './config/shinysdr:/config'
   shiny_ffmpeg:
     image: linuxserver/ffmpeg
+    depends_on:
+      - shinysdr
+    profiles:
+      - fm
     container_name: shiny_ffmpeg
-    command: -nostats -i http://shinysdr:8100/public/audio-stream?rate=48000 -vn -codec:a libmp3lame -b:a 192k -f mp3 -content_type audio/mpeg icecast://source:hackme@icecast:8000/myradio
+    command: -nostats -i http://shinysdr:8100/public/audio-stream?rate=48000 -vn -codec:a libmp3lame -b:a 192k -f mp3 -content_type audio/mpeg icecast://source:hackme@icecast:8000/${ICECAST_STATION_NAME:-myradio}
   #####################
-
-  icecast:
-    image: docker.io/j33r/icecast
-    container_name: icecast
-    ports:
-      - "8000:8000"
-  icecast_ytdl:
-    image: docker.io/foxxmd/ytdl-cron
-    container_name: icecast_ytdl
-    environment:
-    # https://docs.linuxserver.io/general/understanding-puid-and-pgid/
-      - PUID=1000
-      - PGID=1000

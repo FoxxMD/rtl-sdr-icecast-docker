@@ -1,6 +1,8 @@
 # RTL-SDR (FM/HD) Radio Streaming to Icecast
 
-This [docker-compose.yml](/docker-compose.yml) sample provides all of the services required to use a [RTL-SDR usb dongle](https://www.rtl-sdr.com/about-rtl-sdr/) to tune into a FM HD radio -- or any analogue signal supported by [ShinySDR](https://shinysdr.switchb.org/) (AM, FM, SSB, CW) -- and generate a streaming endpoint that can be consumed by a media player.
+This repository provides a docker-compose stack and all of the configuration necessary to use a [RTL-SDR usb dongle](https://www.rtl-sdr.com/about-rtl-sdr/) to tune into a FM HD radio -- or any analogue signal supported by [ShinySDR](https://shinysdr.switchb.org/) (AM, FM, SSB, CW) -- and generate a streaming endpoint that can be consumed by a media player.
+
+Additionally, a [yt-dlp](https://github.com/yt-dlp/yt-dlp) container can be enabled to use a cron schedule for saving streams from the icecast endpoint.
 
 # How It Works
 
@@ -22,13 +24,17 @@ Your host machine passes the RTL-SDR device to an [rtl_tcp server](https://manpa
 
 [yt-dlp](https://github.com/yt-dlp/yt-dlp) is [used alongside cron](https://github.com/FoxxMD/ytdl-cron-docker) enabling you to schedule saving the stream at preset times and for an arbitrary duration.
 
-# Usage
+# Configuration
+
+**Make a copy of [`.env.example`](/.env.example) and rename to `.env`.** This file should be located next to `docker-compose.yml`.
+
+The below configuration details required and notable settings only. Review the comments in `.env` for more configuration.
 
 ## Getting RTL-SDR USB Path
 
-You must determine the correct USB path to pass to the **rtl_tcp** service in order for it to access your radio device.
+Determine the correct USB path to pass to the **rtl_tcp** service in order for it to access your radio device.
 
-Run `lsusb` to get a list of USB devices attached to your host. It will look like this:
+Run `lsusb` on the host machine with the rtl-sdr usb device plugged in to get a list of USB devices attached to your host. It will look like this:
 
 ```
 $ lsusb
@@ -47,38 +53,85 @@ Look for your device, it usually has **RTL** or **DVB-T** in the name. Use the `
 ```
 /dev/bus/usb/005/006
 ```
-This is used in [docker-compose.yml](/docker-compose.yml) under **rtl_tcp** `devices`
+Use this value in `.env` for `USB_DEVICE`
+
+```
+USB_DEVICE=/dev/bus/usb/005/006
+```
 
 ## Choosing a Tuner
 
 **YOU CAN ONLY USE ONE TUNER AT A TIME.**
 
-Either comment out the tuner block you do not want in `docker-compose.yml` or make sure you specify which services to bring `up` when running `docker-compose`.
+Use the provided [docker compose profiles](https://docs.docker.com/compose/profiles/) shown in [usage](#example-usage) to determine which to use.
 
-### nrsc5
+### nrsc5 (HD Radio)
 
 [nrsc5](https://github.com/theori-io/nrsc5) is used to convert digital (HD) FM radio to a usable audio signal. This audio will have (almost) zero static and be a higher quality than the analogue audio signal for normal FM radio.
+
+Use the numeric value for the analog radio station that has the HD Radio you want to tune to. 
+
+Example WABE 90.1 FM => 90.1
+
+Use this value in `.env` for `RADIO_STATION`
+
+```
+RADIO_STATION=90.1
+```
 
 ### ShinySDR
 
 [ShinySDR](https://shinysdr.switchb.org/) is a general purpose radio receiver with a web-based interface. It can play most analogue signals and decode many common digital signals. **It cannot decode HD radio at this time.**
 
-The audio sent to Icecast will be whatever you have tuned ShinySDR to using the interface.
+The audio sent to Icecast will be whatever you have tuned ShinySDR to using its web interface.
 
-## Using Icecast
+## Icecast
 
-Reference [docker-compose.yml](/docker-compose.yml) to set the URL the tuners send audio to:
+Optionally, set the name of the icecast station that will broadcast your signal. The default is `myradio`.
 
-* nrsc5 => `ICECAST_URL=icecast:8000/myradio`
-* shiny => `...icecast://source:hackme@icecast:8000/myradio`
+Uncomment and set station name in `.env` for `ICECAST_STATION_NAME`
 
-Change `myradio` to whatever you want the stream to be accessible at. The stream will be available at `http://localhost:8000/myradio` (or whatever you set)
+```
+ICECAST_STATION_NAME=myradio
+```
+
+The stream will be available at `http://localhost:8000/myradio` (or whatever you set)
 
 ## (Optional) Scheduled stream downloads
 
-If your docker installation is on a **linux host** you must set [PUID and PGID](https://docs.linuxserver.io/general/understanding-puid-and-pgid/) environmental variables in the `icecast_ytdl` service in [docker-compose.yml](/docker-compose.yml) or the files generated will likely not be accessible.
+You can schedule an optional [yt-dlp](https://github.com/yt-dlp/yt-dlp) container to save audio streams to mp3.
 
 To set the schedule edit [/config/ytdl/crontabs/abc](/config/ytdl/crontabs/abc):
 
 * set the [cron expression](https://crontab.guru/)
-* edit downloading length `--download-sections "*0-20"` in seconds IE `*0-20` = save the first two seconds of the stream
+* edit downloading length `--download-sections "*0-20"` in seconds IE `*0-20` = save the first 20 seconds of the stream
+
+Note: If you run Docker on a **Linux Host** see the instructions in your `.env` under `### YTDL ###` for `PUID/PGID` to set file permissions correctly.
+
+# Example Usage
+
+The tuner that is used, along with whether optional stream downloads are enabled, are configured using [docker compose profiles](https://docs.docker.com/compose/profiles/). These profiles are set in the `.env` under `COMPOSE_PROFILES`.
+
+Use ONE OF:
+
+* `hd` => nrsc5 hd radio tuner
+* `fm` => shiny for fm radio
+
+and optionally `ytdl` to enable ripping icecast streams.
+
+Multiple profiles are separated by a comma.
+
+Examples:
+
+* `COMPOSE_PROFILES=hd,ytdl` => hd radio + icecast + ytdl scheduled downloads
+* `COMPOSE_PROFILES=fm,ytdl` => shiny + icecast + ytdl scheduled downloads
+* `COMPOSE_PROFILES=hd` => hd radio + icecast
+* `COMPOSE_PROFILES=fm` => shiny + icecast
+
+After setting this start the stack
+
+```shell
+docker compose up
+```
+
+Your icecast broadcast will now be available at `http://localhost:8000/myradio` (or whatever you set) and, if enabled, stream saving is now enabled.
