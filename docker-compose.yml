@@ -58,7 +58,7 @@ services:
       - PGID=${PGID}
       # replace with TZ identifier for your timezone so cron schedule is in local time
       # https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List
-      - TZ={TZ}
+      - TZ=${TZ}
     volumes:
       - "${YTDL_DIR:-./config/ytdl}:/config"
 
