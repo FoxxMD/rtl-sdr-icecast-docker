@@ -1,4 +1,11 @@
 # min   hour    day     month   weekday command
 
+# To get ytdl to print a proper timestamp for when the stream started (saving)
+# Use this in the filename ---> %(epoch-YOUR_TZ_OFFSET_SECONDS>%Y-%m-%d--%H-%M-%S)s
+#
+# This should be +/- the number of seconds from UTC to get your correct timezone.
+# ytdlp does not compensate for daylight savings time
+# EX -> Eastern Standard Time -> UTC-5hr + 1hr DST -> -4hr -> -14400 seconds -> %(epoch-14400>%Y-%m-%d--%H-%M-%S)s
+
 # test stream, 20 seconds every minute
 #* * * * * yt-dlp --quiet http://icecast:8000/myradio -x --download-sections "*0-20" -o "/config/streams/test-%(epoch-18000>%Y-%m-%d--%H-%M-%S)s.mp3"
